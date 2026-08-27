@@ -321,16 +321,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
 
-                  Text(
-                    '$completedCount / ${quests.length}',
-                    style: TextStyle(
-                      color: Colors.blue.shade300,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-
               const SizedBox(height: 12),
 
               _quests(),

@@ -9,52 +9,105 @@ class QuestService {
   static const int otherDailyCount = 2;
   static const int dailyQuestCount = 5;
 
+  // ============================================================
+  // DAILY QUEST TIMING
+  // ============================================================
+
+  static const int dailyStartHour = 6;
+  static const int dailyDurationHours = 15;
+  static const int dailyEndHour =
+      dailyStartHour + dailyDurationHours; // 21:00
+
   static final Random _random = Random();
 
   // ============================================================
-  // TODAY'S 5 DAILY QUESTS
+  // TODAY'S QUEST CYCLE
   //
-  // EXACTLY:
-  //   3 Physical
-  //   2 Other
+  // 06:00 -> new daily quests begin
+  // 21:00 -> daily quests expire
   //
-  // Existing quests for today are never regenerated.
+  // Before 06:00, the active cycle is still yesterday's cycle.
+  // This prevents a new set of quests being generated at 01:00,
+  // 02:00, etc.
   // ============================================================
 
   static Future<List<Quest>> getTodayQuests() async {
     final storedQuests =
     await StorageService.loadQuests();
 
-    final today = _todayKey();
+    final now = DateTime.now();
 
-    final todayQuests = storedQuests
+    final cycleDate = _questCycleDate(now);
+
+    final cycleDateKey =
+    _dateKeyFromDate(cycleDate);
+
+    // ----------------------------------------------------------
+    // FIRST:
+    // Check whether the previous/current daily cycle has expired.
+    //
+    // This is deliberately performed whenever the app asks for
+    // quests. Therefore the app does NOT need to be running at
+    // exactly 21:00.
+    // ----------------------------------------------------------
+
+    final processedQuests =
+    _processExpiredDailyQuests(
+      storedQuests,
+      now,
+    );
+
+    // ----------------------------------------------------------
+    // Work from the processed list.
+    // ----------------------------------------------------------
+
+    final todayQuests = processedQuests
         .where(
-          (quest) => _dateKey(quest.date) == today,
+          (quest) =>
+      _dateKey(quest.date) ==
+          cycleDateKey,
     )
         .toList();
 
     final todayDailyQuests = todayQuests
         .where(
-          (quest) => quest.type == QuestType.daily,
+          (quest) =>
+      quest.type == QuestType.daily,
     )
         .toList();
 
+    // ----------------------------------------------------------
+    // BEFORE 06:00:
+    //
+    // Do not generate a new day's quests.
+    //
+    // If there is no previous cycle, simply return whatever
+    // exists.
+    // ----------------------------------------------------------
+
+    if (!_isDailyWindowOpen(now)) {
+      return todayQuests;
+    }
+
+    // ----------------------------------------------------------
     // Already generated today's complete set.
+    // ----------------------------------------------------------
+
     if (todayDailyQuests.length >= dailyQuestCount) {
       return todayQuests;
     }
 
     final difficultyDay =
     _calculateDifficultyDay(
-      storedQuests,
-      today,
+      processedQuests,
+      cycleDateKey,
     );
 
     final newQuests = <Quest>[];
 
-    // ----------------------------------------------------------
-    // PHYSICAL
-    // ----------------------------------------------------------
+    // ==========================================================
+    // PHYSICAL DAILY QUESTS
+    // ==========================================================
 
     final existingPhysical =
         todayDailyQuests
@@ -66,7 +119,8 @@ class QuestService {
             .length;
 
     final physicalNeeded =
-        physicalDailyCount - existingPhysical;
+        physicalDailyCount -
+            existingPhysical;
 
     if (physicalNeeded > 0) {
       final templates =
@@ -74,13 +128,18 @@ class QuestService {
         QuestTemplates.physical,
       );
 
-      final existingTitles = todayDailyQuests
-          .map((quest) => quest.title)
+      final existingTitles =
+      todayDailyQuests
+          .map(
+            (quest) => quest.title,
+      )
           .toSet();
 
       templates.removeWhere(
             (template) =>
-            existingTitles.contains(template.title),
+            existingTitles.contains(
+              template.title,
+            ),
       );
 
       templates.shuffle(_random);
@@ -90,7 +149,7 @@ class QuestService {
         newQuests.add(
           _createDailyQuest(
             template,
-            today,
+            cycleDateKey,
             QuestCategory.physical,
             difficultyDay,
           ),
@@ -98,9 +157,9 @@ class QuestService {
       }
     }
 
-    // ----------------------------------------------------------
-    // OTHER
-    // ----------------------------------------------------------
+    // ==========================================================
+    // OTHER DAILY QUESTS
+    // ==========================================================
 
     final existingOther =
         todayDailyQuests
@@ -112,7 +171,8 @@ class QuestService {
             .length;
 
     final otherNeeded =
-        otherDailyCount - existingOther;
+        otherDailyCount -
+            existingOther;
 
     if (otherNeeded > 0) {
       final templates =
@@ -131,7 +191,9 @@ class QuestService {
 
       templates.removeWhere(
             (template) =>
-            existingTitles.contains(template.title),
+            existingTitles.contains(
+              template.title,
+            ),
       );
 
       templates.shuffle(_random);
@@ -141,7 +203,7 @@ class QuestService {
         newQuests.add(
           _createDailyQuest(
             template,
-            today,
+            cycleDateKey,
             QuestCategory.other,
             difficultyDay,
           ),
@@ -149,26 +211,199 @@ class QuestService {
       }
     }
 
-    final updatedTodayQuests = [
+    // ==========================================================
+    // SAVE
+    // ==========================================================
+
+    final updatedCycleQuests = [
       ...todayQuests,
       ...newQuests,
     ];
 
-    final previousQuests = storedQuests
+    final previousQuests = processedQuests
         .where(
           (quest) =>
-      _dateKey(quest.date) != today,
+      _dateKey(quest.date) !=
+          cycleDateKey,
     )
         .toList();
 
     final allQuests = [
       ...previousQuests,
-      ...updatedTodayQuests,
+      ...updatedCycleQuests,
     ];
 
     await StorageService.saveQuests(allQuests);
 
-    return updatedTodayQuests;
+    return updatedCycleQuests;
+  }
+
+  // ============================================================
+  // PROCESS EXPIRED DAILY QUESTS
+  //
+  // This is what makes the system work even when the app was
+  // completely closed at 21:00.
+  // ============================================================
+
+  static List<Quest> _processExpiredDailyQuests(
+      List<Quest> storedQuests,
+      DateTime now,
+      ) {
+    final updated =
+    List<Quest>.from(storedQuests);
+
+    bool changed = false;
+
+    // Group daily quests by their quest-cycle date.
+    final dailyDates = updated
+        .where(
+          (quest) =>
+      quest.type == QuestType.daily,
+    )
+        .map(
+          (quest) => _dateKey(quest.date),
+    )
+        .toSet();
+
+    for (final dateKey in dailyDates) {
+      final date =
+      DateTime.tryParse(dateKey);
+
+      if (date == null) {
+        continue;
+      }
+
+      // The daily quest deadline is 21:00
+      // on its quest date.
+      final deadline = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        dailyEndHour,
+      );
+
+      // The quest cycle has not expired yet.
+      if (now.isBefore(deadline)) {
+        continue;
+      }
+
+      // --------------------------------------------------------
+      // Find unfinished daily quests from this cycle.
+      // --------------------------------------------------------
+
+      final expiredDailyQuests =
+      updated.where(
+            (quest) =>
+        quest.type == QuestType.daily &&
+            _dateKey(quest.date) == dateKey &&
+            !quest.completed &&
+            !quest.missed,
+      );
+
+      for (final quest
+      in expiredDailyQuests) {
+        quest.missed = true;
+        changed = true;
+
+        // ------------------------------------------------------
+        // Create exactly ONE penalty quest for this missed
+        // daily quest.
+        // ------------------------------------------------------
+
+        final penaltyId =
+            '${dateKey}_penalty_${quest.id}';
+
+        final penaltyExists =
+        updated.any(
+              (existing) =>
+          existing.id == penaltyId,
+        );
+
+        if (!penaltyExists) {
+          updated.add(
+            Quest(
+              id: penaltyId,
+              title:
+              'Penalty Quest — ${quest.title}',
+              description:
+              'Penalty for failing the daily quest. '
+                  'Complete 30 minutes of focused effort '
+                  'to clear this penalty.',
+              xpReward: 50,
+              date: dateKey,
+              type: QuestType.penalty,
+            ),
+          );
+
+          changed = true;
+        }
+      }
+    }
+
+    // ----------------------------------------------------------
+    // Persist immediately.
+    //
+    // This means the missed state survives closing/reopening
+    // the application.
+    // ----------------------------------------------------------
+
+    if (changed) {
+      StorageService.saveQuests(updated);
+    }
+
+    return updated;
+  }
+
+  // ============================================================
+  // DAILY WINDOW
+  // ============================================================
+
+  static bool _isDailyWindowOpen(
+      DateTime now,
+      ) {
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      dailyStartHour,
+    );
+
+    final end = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      dailyEndHour,
+    );
+
+    return !now.isBefore(start) &&
+        now.isBefore(end);
+  }
+
+  // ============================================================
+  // QUEST CYCLE DATE
+  //
+  // At 00:00-05:59 we remain on the previous day's cycle.
+  // At 06:00 a new cycle begins.
+  // ============================================================
+
+  static DateTime _questCycleDate(
+      DateTime now,
+      ) {
+    if (now.hour < dailyStartHour) {
+      return DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(
+        const Duration(days: 1),
+      );
+    }
+
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+    );
   }
 
   // ============================================================
@@ -207,7 +442,8 @@ class QuestService {
         .where(
           (quest) =>
       _dateKey(quest.date) == today &&
-          quest.type == QuestType.special,
+          quest.type ==
+              QuestType.special,
     )
         .toList();
 
@@ -264,7 +500,9 @@ class QuestService {
           (quest) =>
       _dateKey(quest.date) == today,
     )
-        .map((quest) => quest.title)
+        .map(
+          (quest) => quest.title,
+    )
         .toSet();
 
     final available =
@@ -272,7 +510,9 @@ class QuestService {
 
     available.removeWhere(
           (template) =>
-          existingTitles.contains(template.title),
+          existingTitles.contains(
+            template.title,
+          ),
     );
 
     available.shuffle(_random);
@@ -319,7 +559,8 @@ class QuestService {
     pow(1.08, safeDay - 1).toDouble();
 
     final xp =
-    (template.xpReward * multiplier).round();
+    (template.xpReward * multiplier)
+        .round();
 
     return Quest(
       id:
@@ -338,9 +579,6 @@ class QuestService {
 
   // ============================================================
   // DIFFICULTY DAY
-  //
-  // First day with quests = Day 1.
-  // Each calendar day increases difficulty by one.
   // ============================================================
 
   static int _calculateDifficultyDay(
@@ -398,16 +636,22 @@ class QuestService {
   // ============================================================
 
   static String _todayKey() {
-    final now = DateTime.now();
+    return _dateKeyFromDate(
+      DateTime.now(),
+    );
+  }
 
+  static String _dateKeyFromDate(
+      DateTime date,
+      ) {
     final year =
-    now.year.toString().padLeft(4, '0');
+    date.year.toString().padLeft(4, '0');
 
     final month =
-    now.month.toString().padLeft(2, '0');
+    date.month.toString().padLeft(2, '0');
 
     final day =
-    now.day.toString().padLeft(2, '0');
+    date.day.toString().padLeft(2, '0');
 
     return '$year-$month-$day';
   }

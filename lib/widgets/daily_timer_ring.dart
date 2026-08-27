@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 class DailyTimerRing extends StatelessWidget {
@@ -13,12 +12,10 @@ class DailyTimerRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 42,
-      height: 42,
+      width: 46,
+      height: 46,
       child: CustomPaint(
-        painter: _DailyTimerRingPainter(
-          now: now,
-        ),
+        painter: _DailyTimerRingPainter(now),
       ),
     );
   }
@@ -29,98 +26,149 @@ class _DailyTimerRingPainter extends CustomPainter {
 
   static const int totalSegments = 15;
 
-  _DailyTimerRingPainter({
-    required this.now,
-  });
+  const _DailyTimerRingPainter(this.now);
 
   @override
-  void paint(
-      Canvas canvas,
-      Size size,
-      ) {
+  void paint(Canvas canvas, Size size) {
     final center = Offset(
       size.width / 2,
       size.height / 2,
     );
 
+    /*
+     * Position of the bars from the centre.
+     */
     final radius =
-        math.min(size.width, size.height) / 2 - 3;
+        math.min(size.width, size.height) / 2 - 7;
 
-    final startHour = 6;
-    final endHour = 21;
-
+    /*
+     * Daily quest window:
+     *
+     * 06:00 AM → 09:00 PM
+     */
     final start = DateTime(
       now.year,
       now.month,
       now.day,
-      startHour,
+      6,
+      0,
     );
 
     final end = DateTime(
       now.year,
       now.month,
       now.day,
-      endHour,
+      21,
+      0,
     );
 
-    int elapsedHours;
+    int elapsedHours = 0;
 
     if (now.isBefore(start)) {
       elapsedHours = 0;
     } else if (!now.isBefore(end)) {
       elapsedHours = totalSegments;
     } else {
-      elapsedHours =
-          now.difference(start).inHours.clamp(
-            0,
-            totalSegments,
-          );
+      elapsedHours = now
+          .difference(start)
+          .inHours
+          .clamp(0, totalSegments);
     }
 
-    const activeColor = Color(0xFF4FC3F7);
-    const inactiveColor = Color(0xFF3A404B);
+    /*
+     * Reference-style bars:
+     *
+     * - short
+     * - rectangular
+     * - slightly rounded
+     * - clearly separated
+     */
+    const double barWidth = 3.0;
+    const double barHeight = 8.0;
+    const double cornerRadius = 1.5;
 
-    final segmentPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.square;
+    final activePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
 
-    const gap = 0.055;
+    final inactivePaint = Paint()
+      ..color = const Color(0xFF4A4A4A)
+      ..style = PaintingStyle.fill;
+
+    /*
+     * One bar every 24 degrees.
+     *
+     * The first bar starts at the top.
+     */
+    const double angleStep =
+        (2 * math.pi) / totalSegments;
 
     for (int i = 0; i < totalSegments; i++) {
-      final segmentStart =
-          -math.pi / 2 +
-              (2 * math.pi / totalSegments) * i +
-              gap;
+      final angle =
+          -math.pi / 2 + (i * angleStep);
 
-      final segmentSweep =
-          (2 * math.pi / totalSegments) -
-              (gap * 2);
-
-      segmentPaint.color =
-      i < totalSegments - elapsedHours
-          ? activeColor
-          : inactiveColor;
-
-      canvas.drawArc(
-        Rect.fromCircle(
-          center: center,
-          radius: radius,
-        ),
-        segmentStart,
-        segmentSweep,
-        false,
-        segmentPaint,
+      /*
+       * Centre position of this bar.
+       */
+      final barCenter = Offset(
+        center.dx + math.cos(angle) * radius,
+        center.dy + math.sin(angle) * radius,
       );
+
+      /*
+       * Draw the rectangle around its own local origin.
+       *
+       * The rectangle is radial:
+       * its LONG side points toward the centre/outward.
+       */
+      canvas.save();
+
+      canvas.translate(
+        barCenter.dx,
+        barCenter.dy,
+      );
+
+      /*
+       * Rotate so the long side of the bar
+       * follows the radius.
+       */
+      canvas.rotate(angle + math.pi / 2);
+
+      final barRect = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: barWidth,
+          height: barHeight,
+        ),
+        const Radius.circular(
+          cornerRadius,
+        ),
+      );
+
+      /*
+       * Bars are consumed clockwise as each hour passes.
+       */
+      final paint =
+      i < totalSegments - elapsedHours
+          ? activePaint
+          : inactivePaint;
+
+      canvas.drawRRect(
+        barRect,
+        paint,
+      );
+
+      canvas.restore();
     }
   }
 
   @override
   bool shouldRepaint(
-      _DailyTimerRingPainter oldDelegate,
+      covariant _DailyTimerRingPainter oldDelegate,
       ) {
-    return oldDelegate.now.minute != now.minute ||
-        oldDelegate.now.hour != now.hour ||
-        oldDelegate.now.day != now.day;
+    return oldDelegate.now.year != now.year ||
+        oldDelegate.now.month != now.month ||
+        oldDelegate.now.day != now.day ||
+        oldDelegate.now.hour != now.hour;
   }
 }

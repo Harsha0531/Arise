@@ -24,6 +24,7 @@ class Quest {
   final int difficultyDay;
 
   bool completed;
+  bool missed;
 
   Quest({
     required this.id,
@@ -35,6 +36,7 @@ class Quest {
     this.category,
     this.difficultyDay = 1,
     this.completed = false,
+    this.missed = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -48,6 +50,7 @@ class Quest {
       'category': category?.name,
       'difficultyDay': difficultyDay,
       'completed': completed,
+      'missed': missed,
     };
   }
 
@@ -61,22 +64,28 @@ class Quest {
       description: map['description'] as String,
       xpReward: map['xpReward'] as int,
       date: map['date'] as String,
+
       type: typeName == null
           ? QuestType.daily
           : QuestType.values.firstWhere(
             (value) => value.name == typeName,
         orElse: () => QuestType.daily,
       ),
+
       category: categoryName == null
           ? null
           : QuestCategory.values.firstWhere(
             (value) => value.name == categoryName,
         orElse: () => QuestCategory.other,
       ),
-      difficultyDay:
-      map['difficultyDay'] as int? ?? 1,
-      completed:
-      map['completed'] as bool? ?? false,
+
+      difficultyDay: map['difficultyDay'] as int? ?? 1,
+
+      completed: map['completed'] as bool? ?? false,
+
+      // Old saved quests won't have this field.
+      // They therefore default to false.
+      missed: map['missed'] as bool? ?? false,
     );
   }
 }
