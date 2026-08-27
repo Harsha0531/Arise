@@ -1,111 +1,120 @@
-import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+
 import 'firebase_options.dart';
-import 'screens/streak_screen.dart';
 import 'models/player.dart';
-import 'models/rank.dart';
-import 'models/quest.dart';
-import 'services/progression_service.dart';
-import 'services/quest_service.dart';
-import 'services/storage_service.dart';
-import 'widgets/daily_timer_ring.dart';
-
 import 'models/user.dart';
-import 'services/user_service.dart';
-import 'screens/registration_screen.dart';
 import 'screens/home_screen.dart';
-
-final GlobalKey<NavigatorState> navigatorKey =
-GlobalKey<NavigatorState>();
+import 'screens/login_screen.dart';
+import 'screens/registration_screen.dart';
+import 'services/storage_service.dart';
+import 'services/user_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  final isRegistered = await UserService.isRegistered();
-
-  if (!isRegistered) {
-    runApp(const SoloLevelingApp.registration());
-    return;
-  }
-
-  final user = await UserService.getCurrentUser();
-
-  if (user == null) {
-    await UserService.clearUser();
-    runApp(const SoloLevelingApp.registration());
-    return;
-  }
-
-  final player = await StorageService.loadPlayer();
-
-  runApp(
-    SoloLevelingApp(
-      player: player,
-      user: user,
-    ),
-  );
+  runApp(const SoloLevelingApp());
 }
 
 class SoloLevelingApp extends StatelessWidget {
-  final Player? player;
-  final AppUser? user;
-  final bool registration;
-
-  const SoloLevelingApp({
-    super.key,
-    required Player player,
-    required AppUser user,
-  })  : player = player,
-        user = user,
-        registration = false;
-
-  const SoloLevelingApp.registration({
-    super.key,
-  })  : player = null,
-        user = null,
-        registration = true;
+  const SoloLevelingApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey,
       title: 'Solo Leveling',
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF05070D),
-        fontFamily: 'sans',
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF4FC3F7),
           secondary: Color(0xFF7C4DFF),
         ),
       ),
-      home: registration
-          ? RegistrationScreen(
-        onRegistered: _onRegistered,
-      )
-          : HomeScreen(player: player!),
+      home: const AuthGate(),
     );
   }
+}
 
-  Future<void> _onRegistered(AppUser user) async {
-    final player = await StorageService.loadPlayer();
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
 
-    player.name = user.displayName;
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _LoadingScreen();
+        }
 
-    await StorageService.savePlayer(player);
+        final firebaseUser = snapshot.data;
 
-    final navigator = navigatorKey.currentState;
-    if (navigator == null || !navigator.mounted) {
-      return;
-    }
+        if (firebaseUser == null) {
+          return const LoginScreen();
+        }
 
-    navigator.pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => HomeScreen(player: player),
+        return FutureBuilder<AppUser?>(
+          future: UserService.getCurrentUser(),
+          builder: (context, userSnapshot) {
+            if (userSnapshot.connectionState ==
+                ConnectionState.waiting) {
+              return const _LoadingScreen();
+            }
+
+            final appUser = userSnapshot.data;
+
+            if (appUser == null) {
+              return RegistrationScreen(
+                onRegistered: (AppUser registeredUser) async {
+                  // Firebase authentication state is already
+                  // handled by AuthGate. RegistrationScreen only
+                  // needs to complete its callback here.
+                  await Future<void>.value();
+                },
+              );
+            }
+
+            return FutureBuilder<Player>(
+              future: StorageService.loadPlayer(),
+              builder: (context, playerSnapshot) {
+                if (playerSnapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const _LoadingScreen();
+                }
+
+                final player = playerSnapshot.data ??
+                    Player(name: appUser.displayName);
+
+                return HomeScreen(
+                  player: player,
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF05070D),
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF4FC3F7),
+        ),
       ),
     );
   }

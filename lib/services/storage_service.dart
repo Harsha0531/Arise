@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/player.dart';
@@ -22,63 +23,156 @@ class StorageService {
 
   static const String _questsKey = 'daily_quests';
 
+  // ============================================================
+  // CURRENT USER
+  // ============================================================
+
+  static String _currentUserId() {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      throw StateError(
+        'No authenticated Firebase user is available.',
+      );
+    }
+
+    return user.uid;
+  }
+
+  // ============================================================
+  // USER-SCOPED KEY
+  // ============================================================
+
+  static String _key(String key) {
+    return 'arise_${_currentUserId()}_$key';
+  }
+
+  // ============================================================
+  // SAVE PLAYER
+  // ============================================================
+
   static Future<void> savePlayer(Player player) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(_nameKey, player.name);
-    await prefs.setInt(_levelKey, player.level);
-    await prefs.setInt(_xpKey, player.xp);
-    await prefs.setInt(_xpDebtKey, player.xpDebt);
+    await prefs.setString(
+      _key(_nameKey),
+      player.name,
+    );
+
     await prefs.setInt(
-      _rewardPointsKey,
+      _key(_levelKey),
+      player.level,
+    );
+
+    await prefs.setInt(
+      _key(_xpKey),
+      player.xp,
+    );
+
+    await prefs.setInt(
+      _key(_xpDebtKey),
+      player.xpDebt,
+    );
+
+    await prefs.setInt(
+      _key(_rewardPointsKey),
       player.rewardPoints,
     );
-    await prefs.setInt(_rankKey, player.rank.index);
 
-    await prefs.setInt(_strengthKey, player.strength);
     await prefs.setInt(
-      _intelligenceKey,
+      _key(_rankKey),
+      player.rank.index,
+    );
+
+    await prefs.setInt(
+      _key(_strengthKey),
+      player.strength,
+    );
+
+    await prefs.setInt(
+      _key(_intelligenceKey),
       player.intelligence,
     );
-    await prefs.setInt(_vitalityKey, player.vitality);
+
     await prefs.setInt(
-      _disciplineKey,
+      _key(_vitalityKey),
+      player.vitality,
+    );
+
+    await prefs.setInt(
+      _key(_disciplineKey),
       player.discipline,
     );
-    await prefs.setInt(_focusKey, player.focus);
+
+    await prefs.setInt(
+      _key(_focusKey),
+      player.focus,
+    );
   }
+
+  // ============================================================
+  // LOAD PLAYER
+  // ============================================================
 
   static Future<Player> loadPlayer() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final rankIndex = prefs.getInt(_rankKey);
+    final rankIndex = prefs.getInt(
+      _key(_rankKey),
+    );
 
     return Player(
-      name: prefs.getString(_nameKey) ?? 'Hunter',
-      level: prefs.getInt(_levelKey) ?? 1,
-      xp: prefs.getInt(_xpKey) ?? 0,
-      xpDebt: prefs.getInt(_xpDebtKey) ?? 0,
-      rewardPoints:
-      prefs.getInt(_rewardPointsKey) ?? 0,
+      name: prefs.getString(
+        _key(_nameKey),
+      ) ??
+          'Hunter',
+      level: prefs.getInt(
+        _key(_levelKey),
+      ) ??
+          1,
+      xp: prefs.getInt(
+        _key(_xpKey),
+      ) ??
+          0,
+      xpDebt: prefs.getInt(
+        _key(_xpDebtKey),
+      ) ??
+          0,
+      rewardPoints: prefs.getInt(
+        _key(_rewardPointsKey),
+      ) ??
+          0,
       rank: rankIndex != null &&
           rankIndex >= 0 &&
           rankIndex < Rank.values.length
           ? Rank.values[rankIndex]
           : Rank.unawakened,
-      strength: prefs.getInt(_strengthKey) ?? 1,
-      intelligence:
-      prefs.getInt(_intelligenceKey) ?? 1,
-      vitality: prefs.getInt(_vitalityKey) ?? 1,
-      discipline:
-      prefs.getInt(_disciplineKey) ?? 1,
-      focus: prefs.getInt(_focusKey) ?? 1,
+      strength: prefs.getInt(
+        _key(_strengthKey),
+      ) ??
+          1,
+      intelligence: prefs.getInt(
+        _key(_intelligenceKey),
+      ) ??
+          1,
+      vitality: prefs.getInt(
+        _key(_vitalityKey),
+      ) ??
+          1,
+      discipline: prefs.getInt(
+        _key(_disciplineKey),
+      ) ??
+          1,
+      focus: prefs.getInt(
+        _key(_focusKey),
+      ) ??
+          1,
     );
   }
 
-  static Future<void> clearPlayer() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-  }
+  // ============================================================
+  // SAVE QUESTS
+  // ============================================================
 
   static Future<void> saveQuests(
       List<Quest> quests,
@@ -86,19 +180,27 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
 
     final data = quests
-        .map((quest) => quest.toMap())
+        .map(
+          (quest) => quest.toMap(),
+    )
         .toList();
 
     await prefs.setString(
-      _questsKey,
+      _key(_questsKey),
       jsonEncode(data),
     );
   }
 
+  // ============================================================
+  // LOAD QUESTS
+  // ============================================================
+
   static Future<List<Quest>> loadQuests() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final raw = prefs.getString(_questsKey);
+    final raw = prefs.getString(
+      _key(_questsKey),
+    );
 
     if (raw == null || raw.isEmpty) {
       return [];
@@ -119,5 +221,42 @@ class StorageService {
     } catch (_) {
       return [];
     }
+  }
+
+  // ============================================================
+  // RESET CURRENT USER PROGRESS
+  // ============================================================
+
+  static Future<void> resetCurrentUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final keysToRemove = <String>[
+      _nameKey,
+      _levelKey,
+      _xpKey,
+      _xpDebtKey,
+      _rewardPointsKey,
+      _rankKey,
+      _strengthKey,
+      _intelligenceKey,
+      _vitalityKey,
+      _disciplineKey,
+      _focusKey,
+      _questsKey,
+    ];
+
+    for (final key in keysToRemove) {
+      await prefs.remove(
+        _key(key),
+      );
+    }
+  }
+
+  // ============================================================
+  // CLEAR CURRENT USER DATA
+  // ============================================================
+
+  static Future<void> clearPlayer() async {
+    await resetCurrentUserData();
   }
 }

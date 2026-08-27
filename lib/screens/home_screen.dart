@@ -6,7 +6,9 @@ import '../models/quest.dart';
 import '../services/progression_service.dart';
 import '../services/quest_service.dart';
 import '../services/storage_service.dart';
+import '../services/user_service.dart';
 import '../widgets/daily_timer_ring.dart';
+import 'account_screen.dart';
 import 'streak_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -49,6 +51,33 @@ class _HomeScreenState extends State<HomeScreen> {
       quests = loadedQuests;
       questsLoading = false;
     });
+  }
+
+  Future<void> _openAccount() async {
+    final user = await UserService.getCurrentUser();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to load the current player account.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AccountScreen(
+          user: user,
+        ),
+      ),
+    );
   }
 
   Future<void> _completeQuest(Quest quest) async {
@@ -205,6 +234,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         letterSpacing: 2,
                       ),
                     ),
+                  ),
+
+                  IconButton(
+                    tooltip: 'Account',
+                    icon: const Icon(
+                      Icons.person_outline,
+                      color: Color(0xFF4FC3F7),
+                    ),
+                    onPressed: _openAccount,
                   ),
 
                   IconButton(

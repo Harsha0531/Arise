@@ -20,6 +20,8 @@ class _RegistrationScreenState
     extends State<RegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
 
@@ -27,6 +29,8 @@ class _RegistrationScreenState
 
   @override
   void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
     _usernameController.dispose();
     _displayNameController.dispose();
     super.dispose();
@@ -45,6 +49,8 @@ class _RegistrationScreenState
 
     try {
       final user = await UserService.register(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
         username: _usernameController.text.trim(),
         displayName: _displayNameController.text.trim(),
       );
@@ -141,6 +147,8 @@ class _RegistrationScreenState
                       label: 'PLAYER NAME',
                       hint: 'Enter your name',
                       icon: Icons.person_outline,
+                      textInputAction:
+                      TextInputAction.next,
                       validator: (value) {
                         final text =
                             value?.trim() ?? '';
@@ -164,6 +172,8 @@ class _RegistrationScreenState
                       label: 'USERNAME',
                       hint: 'Choose a username',
                       icon: Icons.alternate_email,
+                      textInputAction:
+                      TextInputAction.next,
                       validator: (value) {
                         final text =
                             value?.trim() ?? '';
@@ -180,6 +190,61 @@ class _RegistrationScreenState
                           r'^[a-zA-Z0-9_]+$',
                         ).hasMatch(text)) {
                           return 'Use only letters, numbers and _';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    _field(
+                      controller: _emailController,
+                      label: 'EMAIL',
+                      hint: 'Enter your email',
+                      icon: Icons.email_outlined,
+                      keyboardType:
+                      TextInputType.emailAddress,
+                      textInputAction:
+                      TextInputAction.next,
+                      validator: (value) {
+                        final text =
+                            value?.trim() ?? '';
+
+                        if (text.isEmpty) {
+                          return 'Enter your email';
+                        }
+
+                        if (!RegExp(
+                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                        ).hasMatch(text)) {
+                          return 'Enter a valid email';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    _field(
+                      controller: _passwordController,
+                      label: 'PASSWORD',
+                      hint: 'Create a password',
+                      icon: Icons.lock_outline,
+                      obscureText: true,
+                      textInputAction:
+                      TextInputAction.done,
+                      validator: (value) {
+                        final text =
+                            value ?? '';
+
+                        if (text.isEmpty) {
+                          return 'Create a password';
+                        }
+
+                        if (text.length < 6) {
+                          return 'Password must be at least 6 characters';
                         }
 
                         return null;
@@ -214,10 +279,10 @@ class _RegistrationScreenState
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Your player profile will be '
-                                  'stored locally on this device. '
-                                  'You can continue to the System '
-                                  'after registration.',
+                              'Your account will be secured with '
+                                  'Firebase Authentication. Your player '
+                                  'profile and game data can be synchronized '
+                                  'with your account.',
                               style: TextStyle(
                                 color:
                                 Colors.white54,
@@ -290,6 +355,9 @@ class _RegistrationScreenState
     required String hint,
     required IconData icon,
     required String? Function(String?) validator,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    bool obscureText = false,
   }) {
     return Column(
       crossAxisAlignment:
@@ -310,8 +378,9 @@ class _RegistrationScreenState
         TextFormField(
           controller: controller,
           validator: validator,
-          textInputAction:
-          TextInputAction.next,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          obscureText: obscureText,
           style: const TextStyle(
             color: Colors.white,
           ),
@@ -365,7 +434,7 @@ class _RegistrationScreenState
               BorderRadius.circular(14),
               borderSide: const BorderSide(
                 color: Colors.redAccent,
-              ),
+              ),git
             ),
           ),
         ),
