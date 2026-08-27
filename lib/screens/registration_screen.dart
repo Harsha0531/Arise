@@ -26,6 +26,7 @@ class _RegistrationScreenState
   final _displayNameController = TextEditingController();
 
   bool _isRegistering = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -143,12 +144,41 @@ class _RegistrationScreenState
                     const SizedBox(height: 40),
 
                     _field(
+                      controller: _emailController,
+                      label: 'EMAIL',
+                      hint: 'Enter your email',
+                      icon: Icons.email_outlined,
+                      keyboardType:
+                      TextInputType.emailAddress,
+                      validator: (value) {
+                        final text =
+                            value?.trim() ?? '';
+
+                        if (text.isEmpty) {
+                          return 'Enter your email';
+                        }
+
+                        if (!RegExp(
+                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                        ).hasMatch(text)) {
+                          return 'Enter a valid email';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    _passwordField(),
+
+                    const SizedBox(height: 18),
+
+                    _field(
                       controller: _displayNameController,
                       label: 'PLAYER NAME',
                       hint: 'Enter your name',
                       icon: Icons.person_outline,
-                      textInputAction:
-                      TextInputAction.next,
                       validator: (value) {
                         final text =
                             value?.trim() ?? '';
@@ -172,8 +202,6 @@ class _RegistrationScreenState
                       label: 'USERNAME',
                       hint: 'Choose a username',
                       icon: Icons.alternate_email,
-                      textInputAction:
-                      TextInputAction.next,
                       validator: (value) {
                         final text =
                             value?.trim() ?? '';
@@ -196,74 +224,16 @@ class _RegistrationScreenState
                       },
                     ),
 
-                    const SizedBox(height: 18),
-
-                    _field(
-                      controller: _emailController,
-                      label: 'EMAIL',
-                      hint: 'Enter your email',
-                      icon: Icons.email_outlined,
-                      keyboardType:
-                      TextInputType.emailAddress,
-                      textInputAction:
-                      TextInputAction.next,
-                      validator: (value) {
-                        final text =
-                            value?.trim() ?? '';
-
-                        if (text.isEmpty) {
-                          return 'Enter your email';
-                        }
-
-                        if (!RegExp(
-                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                        ).hasMatch(text)) {
-                          return 'Enter a valid email';
-                        }
-
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    _field(
-                      controller: _passwordController,
-                      label: 'PASSWORD',
-                      hint: 'Create a password',
-                      icon: Icons.lock_outline,
-                      obscureText: true,
-                      textInputAction:
-                      TextInputAction.done,
-                      validator: (value) {
-                        final text =
-                            value ?? '';
-
-                        if (text.isEmpty) {
-                          return 'Create a password';
-                        }
-
-                        if (text.length < 6) {
-                          return 'Password must be at least 6 characters';
-                        }
-
-                        return null;
-                      },
-                    ),
-
                     const SizedBox(height: 30),
 
                     Container(
-                      padding:
-                      const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color:
-                        const Color(0xFF0B101C),
+                        color: const Color(0xFF0B101C),
                         borderRadius:
                         BorderRadius.circular(14),
                         border: Border.all(
-                          color:
-                          const Color(0xFF1D2A42),
+                          color: const Color(0xFF1D2A42),
                         ),
                       ),
                       child: const Row(
@@ -271,21 +241,18 @@ class _RegistrationScreenState
                         CrossAxisAlignment.start,
                         children: [
                           Icon(
-                            Icons.info_outline,
-                            color:
-                            Color(0xFF4FC3F7),
+                            Icons.cloud_done_outlined,
+                            color: Color(0xFF4FC3F7),
                             size: 20,
                           ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Your account will be secured with '
-                                  'Firebase Authentication. Your player '
-                                  'profile and game data can be synchronized '
-                                  'with your account.',
+                              'Your account is secured with Firebase '
+                                  'Authentication. Your Arise player data '
+                                  'will be associated with your account.',
                               style: TextStyle(
-                                color:
-                                Colors.white54,
+                                color: Colors.white54,
                                 fontSize: 12,
                                 height: 1.5,
                               ),
@@ -300,22 +267,21 @@ class _RegistrationScreenState
                     SizedBox(
                       height: 54,
                       child: ElevatedButton(
-                        onPressed: _isRegistering
+                        onPressed:
+                        _isRegistering
                             ? null
                             : _register,
-                        style: ElevatedButton.styleFrom(
+                        style:
+                        ElevatedButton.styleFrom(
                           backgroundColor:
                           const Color(0xFF4FC3F7),
-                          foregroundColor:
-                          Colors.black,
+                          foregroundColor: Colors.black,
                           disabledBackgroundColor:
                           const Color(0xFF26323D),
                           shape:
                           RoundedRectangleBorder(
                             borderRadius:
-                            BorderRadius.circular(
-                              14,
-                            ),
+                            BorderRadius.circular(14),
                           ),
                         ),
                         child: _isRegistering
@@ -325,8 +291,7 @@ class _RegistrationScreenState
                           child:
                           CircularProgressIndicator(
                             strokeWidth: 2,
-                            color:
-                            Colors.black,
+                            color: Colors.black,
                           ),
                         )
                             : const Text(
@@ -349,23 +314,14 @@ class _RegistrationScreenState
     );
   }
 
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    required String? Function(String?) validator,
-    TextInputType? keyboardType,
-    TextInputAction? textInputAction,
-    bool obscureText = false,
-  }) {
+  Widget _passwordField() {
     return Column(
       crossAxisAlignment:
       CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
+        const Text(
+          'PASSWORD',
+          style: TextStyle(
             color: Colors.white70,
             fontSize: 11,
             fontWeight: FontWeight.bold,
@@ -376,26 +332,50 @@ class _RegistrationScreenState
         const SizedBox(height: 8),
 
         TextFormField(
-          controller: controller,
-          validator: validator,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          obscureText: obscureText,
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          textInputAction: TextInputAction.next,
           style: const TextStyle(
             color: Colors.white,
           ),
+          validator: (value) {
+            final text = value ?? '';
+
+            if (text.isEmpty) {
+              return 'Enter a password';
+            }
+
+            if (text.length < 6) {
+              return 'Password must be at least 6 characters';
+            }
+
+            return null;
+          },
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: 'Create a password',
             hintStyle: const TextStyle(
               color: Colors.white30,
             ),
-            prefixIcon: Icon(
-              icon,
-              color: const Color(0xFF4FC3F7),
+            prefixIcon: const Icon(
+              Icons.lock_outline,
+              color: Color(0xFF4FC3F7),
+            ),
+            suffixIcon: IconButton(
+              onPressed: () {
+                setState(() {
+                  _obscurePassword =
+                  !_obscurePassword;
+                });
+              },
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                color: Colors.white54,
+              ),
             ),
             filled: true,
-            fillColor:
-            const Color(0xFF0B101C),
+            fillColor: const Color(0xFF0B101C),
             border: OutlineInputBorder(
               borderRadius:
               BorderRadius.circular(14),
@@ -434,7 +414,96 @@ class _RegistrationScreenState
               BorderRadius.circular(14),
               borderSide: const BorderSide(
                 color: Colors.redAccent,
-              ),git
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required String? Function(String?) validator,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment:
+      CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        TextFormField(
+          controller: controller,
+          validator: validator,
+          keyboardType: keyboardType,
+          textInputAction: TextInputAction.next,
+          style: const TextStyle(
+            color: Colors.white,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: Colors.white30,
+            ),
+            prefixIcon: Icon(
+              icon,
+              color: const Color(0xFF4FC3F7),
+            ),
+            filled: true,
+            fillColor: const Color(0xFF0B101C),
+            border: OutlineInputBorder(
+              borderRadius:
+              BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF1D2A42),
+              ),
+            ),
+            enabledBorder:
+            OutlineInputBorder(
+              borderRadius:
+              BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF1D2A42),
+              ),
+            ),
+            focusedBorder:
+            OutlineInputBorder(
+              borderRadius:
+              BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF4FC3F7),
+                width: 1.5,
+              ),
+            ),
+            errorBorder:
+            OutlineInputBorder(
+              borderRadius:
+              BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Colors.redAccent,
+              ),
+            ),
+            focusedErrorBorder:
+            OutlineInputBorder(
+              borderRadius:
+              BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Colors.redAccent,
+              ),
             ),
           ),
         ),

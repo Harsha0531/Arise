@@ -5,8 +5,7 @@ import '../models/user.dart';
 import 'storage_service.dart';
 
 class UserService {
-  static final FirebaseAuth _auth =
-      FirebaseAuth.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   static final FirebaseFirestore _firestore =
       FirebaseFirestore.instance;
@@ -26,8 +25,7 @@ class UserService {
   // ============================================================
 
   static Future<AppUser?> getCurrentUser() async {
-    final firebaseUser =
-        _auth.currentUser;
+    final firebaseUser = _auth.currentUser;
 
     if (firebaseUser == null) {
       return null;
@@ -51,16 +49,13 @@ class UserService {
 
       return AppUser.fromMap({
         'id': firebaseUser.uid,
-        'username':
-        data['username'] ?? '',
+        'username': data['username'] ?? '',
         'displayName':
         data['displayName'] ??
             firebaseUser.displayName ??
             '',
-        'createdAt':
-        data['createdAt'] is Timestamp
-            ? (data['createdAt']
-        as Timestamp)
+        'createdAt': data['createdAt'] is Timestamp
+            ? (data['createdAt'] as Timestamp)
             .toDate()
             .toIso8601String()
             : data['createdAt'],
@@ -81,20 +76,17 @@ class UserService {
     required String displayName,
   }) async {
     final credential =
-    await _auth
-        .createUserWithEmailAndPassword(
+    await _auth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
 
-    final firebaseUser =
-        credential.user;
+    final firebaseUser = credential.user;
 
     if (firebaseUser == null) {
       throw FirebaseAuthException(
         code: 'registration-failed',
-        message:
-        'Firebase did not return a user.',
+        message: 'Firebase did not return a user.',
       );
     }
 
@@ -111,8 +103,7 @@ class UserService {
       'username': username.trim(),
       'displayName': displayName.trim(),
       'email': email.trim(),
-      'createdAt':
-      Timestamp.fromDate(now),
+      'createdAt': Timestamp.fromDate(now),
     });
 
     return AppUser(
@@ -131,8 +122,7 @@ class UserService {
     required String email,
     required String password,
   }) async {
-    await _auth
-        .signInWithEmailAndPassword(
+    await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
@@ -145,42 +135,49 @@ class UserService {
   // ============================================================
 
   static Future<void> logout() async {
-    // IMPORTANT:
-    // Logout does NOT delete local cache.
-    //
-    // The cache remains associated with this Firebase UID and
-    // becomes available again when this same user logs in.
     await _auth.signOut();
   }
 
   // ============================================================
-  // RESET GAME PROGRESS
+  // RESET PROGRESS
   // ============================================================
 
   static Future<void> resetProgress() async {
-    final firebaseUser =
-        _auth.currentUser;
+    final firebaseUser = _auth.currentUser;
 
     if (firebaseUser == null) {
       throw FirebaseAuthException(
         code: 'not-authenticated',
-        message:
-        'No authenticated Firebase user.',
+        message: 'No authenticated Firebase user.',
       );
     }
 
-    // This deletes:
-    // - current user's Firestore player
-    // - current user's Firestore quests
-    // - current user's UID-scoped local cache
-    //
-    // It does NOT delete:
-    // - Firebase account
-    // - email
-    // - password
-    // - user profile
-    // - authentication session
+    // Reset only this authenticated user's local data.
     await StorageService.resetProgress();
+
+    // Reset the cloud progression document if one exists.
+    //
+    // User account/profile information is intentionally preserved.
+    await _firestore
+        .collection(_usersCollection)
+        .doc(firebaseUser.uid)
+        .set(
+      {
+        'progress': {
+          'level': 1,
+          'xp': 0,
+          'xpDebt': 0,
+          'rewardPoints': 0,
+          'rank': 0,
+          'strength': 1,
+          'intelligence': 1,
+          'vitality': 1,
+          'discipline': 1,
+          'focus': 1,
+        },
+      },
+      SetOptions(merge: true),
+    );
   }
 
   // ============================================================
@@ -190,14 +187,12 @@ class UserService {
   static Future<void> updateUser(
       AppUser user,
       ) async {
-    final firebaseUser =
-        _auth.currentUser;
+    final firebaseUser = _auth.currentUser;
 
     if (firebaseUser == null) {
       throw FirebaseAuthException(
         code: 'not-authenticated',
-        message:
-        'No authenticated Firebase user.',
+        message: 'No authenticated Firebase user.',
       );
     }
 
@@ -207,20 +202,15 @@ class UserService {
         .set(
       {
         'username': user.username,
-        'displayName':
-        user.displayName,
+        'displayName': user.displayName,
         'createdAt':
-        Timestamp.fromDate(
-          user.createdAt,
-        ),
+        Timestamp.fromDate(user.createdAt),
       },
       SetOptions(merge: true),
     );
 
-    if (firebaseUser.displayName !=
-        user.displayName) {
-      await firebaseUser
-          .updateDisplayName(
+    if (firebaseUser.displayName != user.displayName) {
+      await firebaseUser.updateDisplayName(
         user.displayName,
       );
     }
@@ -231,15 +221,14 @@ class UserService {
   // ============================================================
 
   static Future<void> clearUser() async {
-    await logout();
+    await _auth.signOut();
   }
 
   // ============================================================
   // CURRENT USER ID
   // ============================================================
 
-  static Future<String?>
-  getCurrentUserId() async {
+  static Future<String?> getCurrentUserId() async {
     return _auth.currentUser?.uid;
   }
 
@@ -247,8 +236,7 @@ class UserService {
   // CURRENT EMAIL
   // ============================================================
 
-  static String?
-  getCurrentUserEmail() {
+  static String? getCurrentUserEmail() {
     return _auth.currentUser?.email;
   }
 }
