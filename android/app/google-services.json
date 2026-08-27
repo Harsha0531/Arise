@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "555546448550",
+    "project_id": "arise-9d6ce",
+    "storage_bucket": "arise-9d6ce.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:555546448550:android:ffdc1e20bde502a4799a67",
+        "android_client_info": {
+          "package_name": "com.solo_leveling.app.solo_leveling"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcjKO9dAwpGGxw8AAaPv6dBrpeOKwJaws"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
