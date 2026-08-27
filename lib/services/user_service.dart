@@ -1,21 +1,21 @@
-import 'dart:convert';
-import 'dart:math';
-
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/user.dart';
 
 class UserService {
-  static const String _userKey = 'solo_leveling_user';
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  static const String _usersCollection = 'users';
 
   // ============================================================
-  // CHECK REGISTRATION
+  // CHECK REGISTRATION / LOGIN STATE
   // ============================================================
 
   static Future<bool> isRegistered() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    return prefs.containsKey(_userKey);
+    return _auth.currentUser != null;
   }
 
   // ============================================================
@@ -23,19 +23,37 @@ class UserService {
   // ============================================================
 
   static Future<AppUser?> getCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
+    final firebaseUser = _auth.currentUser;
 
-    final jsonString = prefs.getString(_userKey);
-
-    if (jsonString == null || jsonString.isEmpty) {
+    if (firebaseUser == null) {
       return null;
     }
 
     try {
-      final map =
-      jsonDecode(jsonString) as Map<String, dynamic>;
+      final document = await _firestore
+          .collection(_usersCollection)
+          .doc(firebaseUser.uid)
+          .get();
 
-      return AppUser.fromMap(map);
+      if (!document.exists) {
+        return null;
+      }
+
+      final data = document.data();
+
+      if (data == null) {
+        return null;
+      }
+
+      return AppUser.fromMap({
+        'id': firebaseUser.uid,
+        'username': data['username'] ?? '',
+        'displayName':
+        data['displayName'] ?? firebaseUser.displayName ?? '',
+        'createdAt': data['createdAt'] is Timestamp
+            ? (data['createdAt'] as Timestamp).toDate().toIso8601String()
+            : data['createdAt'],
+      });
     } catch (_) {
       return null;
     }
@@ -46,32 +64,71 @@ class UserService {
   // ============================================================
 
   static Future<AppUser> register({
+    required String email,
+    required String password,
     required String username,
     required String displayName,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
 
-    final existing = await getCurrentUser();
+    final firebaseUser = credential.user;
 
-    if (existing != null) {
-      return existing;
+    if (firebaseUser == null) {
+      throw FirebaseAuthException(
+        code: 'registration-failed',
+        message: 'Firebase did not return a user.',
+      );
     }
+
+    await firebaseUser.updateDisplayName(
+      displayName.trim(),
+    );
 
     final now = DateTime.now();
 
-    final user = AppUser(
-      id: _generateUserId(now),
+    await _firestore
+        .collection(_usersCollection)
+        .doc(firebaseUser.uid)
+        .set({
+      'username': username.trim(),
+      'displayName': displayName.trim(),
+      'email': email.trim(),
+      'createdAt': Timestamp.fromDate(now),
+    });
+
+    return AppUser(
+      id: firebaseUser.uid,
       username: username.trim(),
       displayName: displayName.trim(),
       createdAt: now,
     );
+  }
 
-    await prefs.setString(
-      _userKey,
-      jsonEncode(user.toMap()),
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
+  static Future<AppUser?> login({
+    required String email,
+    required String password,
+  }) async {
+    await _auth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
     );
 
-    return user;
+    return getCurrentUser();
+  }
+
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+
+  static Future<void> logout() async {
+    await _auth.signOut();
   }
 
   // ============================================================
@@ -79,41 +136,55 @@ class UserService {
   // ============================================================
 
   static Future<void> updateUser(AppUser user) async {
-    final prefs = await SharedPreferences.getInstance();
+    final firebaseUser = _auth.currentUser;
 
-    await prefs.setString(
-      _userKey,
-      jsonEncode(user.toMap()),
+    if (firebaseUser == null) {
+      throw FirebaseAuthException(
+        code: 'not-authenticated',
+        message: 'No authenticated Firebase user.',
+      );
+    }
+
+    await _firestore
+        .collection(_usersCollection)
+        .doc(firebaseUser.uid)
+        .set(
+      {
+        'username': user.username,
+        'displayName': user.displayName,
+        'createdAt': Timestamp.fromDate(user.createdAt),
+      },
+      SetOptions(merge: true),
     );
+
+    if (firebaseUser.displayName != user.displayName) {
+      await firebaseUser.updateDisplayName(
+        user.displayName,
+      );
+    }
   }
 
   // ============================================================
-  // CLEAR USER
+  // DELETE LOCAL SESSION / LOGOUT
   // ============================================================
 
   static Future<void> clearUser() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove(_userKey);
+    await _auth.signOut();
   }
 
   // ============================================================
-  // USER ID
+  // CURRENT USER ID
   // ============================================================
 
   static Future<String?> getCurrentUserId() async {
-    final user = await getCurrentUser();
-
-    return user?.id;
+    return _auth.currentUser?.uid;
   }
 
   // ============================================================
-  // ID GENERATION
+  // CURRENT EMAIL
   // ============================================================
 
-  static String _generateUserId(DateTime now) {
-    final random = Random();
-
-    return 'player_${now.microsecondsSinceEpoch}_${random.nextInt(999999)}';
+  static String? getCurrentUserEmail() {
+    return _auth.currentUser?.email;
   }
 }
